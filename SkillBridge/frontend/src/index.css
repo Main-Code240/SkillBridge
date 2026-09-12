@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #111827;
+    background-color: #F4F8FF;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.2;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-strong hover:shadow-elevated active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-brand-primary border border-brand-primary/20 transition-all hover:bg-brand-primary/5 hover:border-brand-primary/30 active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-ink-muted transition-all hover:bg-gray-100 hover:text-ink active:scale-[0.98];
+  }
+  .input-field {
+    @apply w-full rounded-xl border border-surface-border bg-white px-4 py-2.5 text-sm text-ink placeholder:text-ink-muted/50 transition-all focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20;
+  }
+  .card {
+    @apply rounded-2xl bg-white border border-surface-border shadow-card;
+  }
+  .sidebar-item {
+    @apply flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-ink-muted transition-all hover:bg-brand-primary/5 hover:text-brand-primary;
+  }
+  .sidebar-item-active {
+    @apply bg-brand-primary text-white hover:bg-brand-primary hover:text-white;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+}
