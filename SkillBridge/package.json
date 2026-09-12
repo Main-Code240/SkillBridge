@@ -1,0 +1,13 @@
+{
+  "name": "sih26044",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "frontend": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:typecheck": "npm --prefix frontend run typecheck",
+    "frontend:lint": "npm --prefix frontend run lint",
+    "backend": "npm --prefix backend run dev",
+    "backend:start": "npm --prefix backend run start"
+  }
+}
