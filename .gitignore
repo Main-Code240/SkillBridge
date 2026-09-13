@@ -1,0 +1,18 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.env
+.vscode
+# Logs
+logs/
+*.log
+
+# Local-only engineering notes
+ARCHITECTURE.md
