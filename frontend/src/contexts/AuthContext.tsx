@@ -1,128 +1,297 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase } from '@/lib/supabase';
-import type { Profile, UserRole } from '@/types';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+
+import type { Profile, UserRole } from "@/types";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+const TOKEN_KEY = "skillbridge_token";
+const USER_KEY = "skillbridge_user";
 
 interface AuthContextValue {
   user: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, role: UserRole, fullName: string) => Promise<{ error: string | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    role: UserRole,
+    fullName: string
+  ) => Promise<{ error: string | null }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  updateProfile: (updates: Partial<Profile>) => Promise<{ error: string | null }>;
+  updateProfile: (
+    updates: Partial<Profile>
+  ) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function getStoredUser(): Profile | null {
+  try {
+    const storedUser = localStorage.getItem(USER_KEY);
+
+    if (!storedUser) {
+      return null;
+    }
+
+    return JSON.parse(storedUser) as Profile;
+  } catch {
+    localStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
+async function parseResponse(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {
+      success: false,
+      message: "Invalid server response",
+    };
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Profile | null>(null);
+  const [user, setUser] = useState<Profile | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string): Promise<Profile | null> => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) return null;
-    return data as Profile;
+  const saveAuth = (token: string, authenticatedUser: Profile) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(authenticatedUser));
+    setUser(authenticatedUser);
   };
 
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session && mounted) {
-        const profile = await fetchProfile(session.user.id);
-        if (mounted) setUser(profile);
-      }
-      if (mounted) setLoading(false);
-    })();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      (async () => {
-        if (event === 'SIGNED_OUT' || !session) {
-          setUser(null);
-          return;
-        }
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          const profile = await fetchProfile(session.user.id);
-          setUser(profile);
-        }
-      })();
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const signUp = async (email: string, password: string, role: UserRole, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
-    if (!data.user) return { error: 'Failed to create account.' };
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: data.user.id,
-        email,
-        role,
-        full_name: fullName,
-      });
-    if (profileError) return { error: profileError.message };
-
-    const profile = await fetchProfile(data.user.id);
-    setUser(profile);
-    return { error: null };
-  };
-
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    if (!data.user) return { error: 'Login failed.' };
-
-    const profile = await fetchProfile(data.user.id);
-    if (!profile) return { error: 'Profile not found. Please contact support.' };
-    if (profile.status === 'suspended') return { error: 'Account suspended. Contact admin.' };
-    setUser(profile);
-    return { error: null };
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const clearAuth = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
     setUser(null);
   };
 
-  const updateProfile = async (updates: Partial<Profile>) => {
-    if (!user) return { error: 'Not authenticated' };
-    const { error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', user.id);
-    if (error) return { error: error.message };
-    const updated = await fetchProfile(user.id);
-    setUser(updated);
-    return { error: null };
+  const getToken = () => {
+    return localStorage.getItem(TOKEN_KEY);
   };
 
   const refreshProfile = async () => {
-    if (!user) return;
-    const profile = await fetchProfile(user.id);
-    setUser(profile);
+    const token = getToken();
+
+    if (!token) {
+      setUser(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await parseResponse(response);
+
+      if (!response.ok || !data.success || !data.user) {
+        clearAuth();
+        return;
+      }
+
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      setUser(data.user);
+    } catch {
+      const storedUser = getStoredUser();
+
+      if (storedUser) {
+        setUser(storedUser);
+      } else {
+        clearAuth();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        await refreshProfile();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  const signUp = async (
+    email: string,
+    password: string,
+    role: UserRole,
+    fullName: string
+  ): Promise<{ error: string | null }> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          role,
+          fullName,
+        }),
+      });
+
+      const data = await parseResponse(response);
+
+      if (!response.ok || !data.success) {
+        return {
+          error: data.message || "Registration failed",
+        };
+      }
+
+      if (data.token && data.user) {
+        saveAuth(data.token, data.user);
+      }
+
+      return {
+        error: null,
+      };
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to connect to the server",
+      };
+    }
+  };
+
+  const signIn = async (
+    email: string,
+    password: string
+  ): Promise<{ error: string | null }> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+
+      const data = await parseResponse(response);
+
+      if (!response.ok || !data.success) {
+        return {
+          error: data.message || "Login failed",
+        };
+      }
+
+      if (!data.token || !data.user) {
+        return {
+          error: "Login response is missing authentication data",
+        };
+      }
+
+      saveAuth(data.token, data.user);
+
+      return {
+        error: null,
+      };
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to connect to the server",
+      };
+    }
+  };
+
+  const signOut = async (): Promise<void> => {
+    clearAuth();
+  };
+
+  const updateProfile = async (
+    updates: Partial<Profile>
+  ): Promise<{ error: string | null }> => {
+    const token = getToken();
+
+    if (!token) {
+      return {
+        error: "Authentication required",
+      };
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await parseResponse(response);
+
+      if (!response.ok || !data.success) {
+        return {
+          error: data.message || "Profile update failed",
+        };
+      }
+
+      if (data.user) {
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        setUser(data.user);
+      }
+
+      return {
+        error: null,
+      };
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to connect to the server",
+      };
+    }
+  };
+
+  const value: AuthContextValue = {
+    user,
+    loading,
+    signUp,
+    signIn,
+    signOut,
+    updateProfile,
+    refreshProfile,
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, updateProfile, refreshProfile }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+
+  return context;
 }
